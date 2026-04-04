@@ -1,5 +1,5 @@
 # 🚀 OXLO-SENTINEL: MISSION CONTROL CENTER
-> **Status:** 🟡 INITIALIZING | **Phase:** 1 — Infrastructure Scaffolding
+> **Status:** 🟢 ON TRACK | **Phase:** 2 — Core Cognitive Engine
 > **Hackathon:** OxBuild | **Deadline:** TBD | **Stack:** Python · LangGraph · MCP · aiogram · E2B · Supabase
 
 ---
@@ -8,9 +8,9 @@
 
 | Metric | Value |
 |---|---|
-| **Overall Progress** | 0% `░░░░░░░░░░░░░░░░░░░░` |
-| **Phase** | 1 of 5 — Infrastructure & Scaffolding |
-| **Current Focus** | Repository setup + API key acquisition |
+| **Overall Progress** | 20% `████░░░░░░░░░░░░░░░░` |
+| **Phase** | 2 of 5 — Core Cognitive Engine |
+| **Current Focus** | LangGraph Node Implementation |
 | **Oxlo API Calls / Request** | Target: 6–14 calls (hackathon scoring) |
 | **Latency Target** | < 3,750ms (happy path, 1 audit cycle) |
 | **Hard Blocker** | None — awaiting first commit |
@@ -37,44 +37,44 @@
 ### ✅ PHASE 1: INFRASTRUCTURE & SCAFFOLDING
 
 #### **1.1 Repository & Project Initialization**
-- [ ] Create `oxlo-sentinel/` root directory and initialize Git repo
+- [x] Create `oxlo-sentinel/` root directory and initialize Git repo
   - `skill: micro-saas-launcher`
   - **DoD:** `git init` complete, `.gitignore` covers `.env`, `__pycache__`, `.e2b/`
-- [ ] Create full directory skeleton per `ARCHITECTURE.md §3a`
+- [x] Create full directory skeleton per `ARCHITECTURE.md §3a`
   - `skill: micro-saas-launcher`
   - **DoD:** All 7 top-level packages (`bot/`, `graph/`, `mcp_server/`, `db/`, `config/`, `tests/`, `migrations/`) exist with `__init__.py`
-- [ ] Create `pyproject.toml` with all pinned dependencies from `ARCHITECTURE.md §7`
+- [x] Create `pyproject.toml` with all pinned dependencies from `ARCHITECTURE.md §7`
   - `skill: fp-backend`
   - **DoD:** `pip install -e .` succeeds with zero resolver conflicts; Python ≥ 3.11 enforced
-- [ ] Create `.env.example` documenting all 9 required environment variables
+- [x] Create `.env.example` documenting all 9 required environment variables
   - `skill: api-security-best-practices`
   - **DoD:** Every var has an inline comment explaining where to obtain it; no real secrets present
-- [ ] Create `config/settings.py` — Pydantic `BaseSettings` with startup validation
+- [x] Create `config/settings.py` — Pydantic `BaseSettings` with startup validation
   - `skill: api-security-best-practices`
   - **DoD:** `python -c "from config.settings import settings"` raises `ValidationError` if any required var is missing; all vars load from `.env` correctly
 
 #### **1.2 External Service Registration**
-- [ ] Register Telegram bot via `@BotFather` — obtain `TELEGRAM_BOT_TOKEN`
+- [x] Register Telegram bot via `@BotFather` — obtain `TELEGRAM_BOT_TOKEN`
   - `skill: micro-saas-launcher`
   - **DoD:** Bot is visible in Telegram, `/start` returns default message from BotFather
-- [ ] Create Oxlo.ai account — obtain `OXLO_API_KEY`, confirm model list includes `llama-3-70b`, `mistral-7b`, `qwen2-72b`, `deepseek-r1`
+- [x] Create Oxlo.ai account — obtain `OXLO_API_KEY`, confirm model list includes `llama-3-70b`, `mistral-7b`, `qwen2-72b`, `deepseek-r1`
   - `skill: micro-saas-launcher`
   - **DoD:** `curl https://api.oxlo.ai/v1/models -H "Authorization: Bearer $OXLO_API_KEY"` returns all 4 target models
-- [ ] Create E2B account — obtain `E2B_API_KEY`, validate sandbox execution via SDK smoke test
+- [x] Create E2B account — obtain `E2B_API_KEY`, validate sandbox execution via SDK smoke test
   - `skill: agent-tool-builder`
   - **DoD:** `e2b.AsyncSandbox.create()` succeeds; `sandbox.run_code("print(1+1)")` returns `2`
-- [ ] Create Supabase project — obtain `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DATABASE_URL`
+- [x] Create Supabase project — obtain `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `DATABASE_URL`
   - `skill: api-endpoint-builder`
   - **DoD:** Connection string resolves; `asyncpg.connect(DATABASE_URL)` opens without error
 
 #### **1.3 Database Bootstrap**
-- [ ] Run `db/migrations/001_initial_schema.sql` against Supabase
+- [x] Run `db/migrations/001_initial_schema.sql` against Supabase
   - `skill: api-endpoint-builder`
   - **DoD:** All 5 tables exist (`users`, `sessions`, `chat_history`, `audit_logs`, `rate_limits`); all constraints and indexes confirmed with `\d tablename` in psql
-- [ ] Implement `db/client.py` — `asyncpg` connection pool singleton (min=2, max=10)
+- [x] Implement `db/client.py` — `asyncpg` connection pool singleton (min=2, max=10)
   - `skill: api-endpoint-builder`
   - **DoD:** `await db.fetch_one("SELECT 1")` returns `1`; pool does not leak connections on exception
-- [ ] Implement `db/models.py` — SQLAlchemy Core table definitions mirroring SQL schema
+- [x] Implement `db/models.py` — SQLAlchemy Core table definitions mirroring SQL schema
   - `skill: fp-backend`
   - **DoD:** Each table object maps 1:1 to SQL schema; column types are strictly typed (no `Text` for UUIDs)
 
