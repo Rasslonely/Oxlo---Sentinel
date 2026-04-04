@@ -1,0 +1,18 @@
+[project]
+name = "oxlo-sentinel"
+version = "1.0.0"
+requires-python = ">=3.11"
+
+dependencies = [
+    "aiogram==3.14.0",
+    "langgraph==0.2.55",
+    "langchain-core==0.3.28",
+    "openai==1.54.0",          # Oxlo is OpenAI-compatible
+    "mcp==1.2.0",              # Model Context Protocol SDK
+    "fastmcp==1.0.0",          # MCP server framework
+    "e2b-code-interpreter==1.0.3",
+    "asyncpg==0.30.0",
+    "supabase==2.10.0",
+    "pydantic-settings==2.7.0",
+    "python-dotenv==1.0.1",
+]
