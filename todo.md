@@ -1,5 +1,5 @@
 # 🚀 OXLO-SENTINEL: MISSION CONTROL CENTER
-> **Status:** 🟢 ON TRACK | **Phase:** 3 — Telegram Interface & Live UX
+> **Status:** 🟢 ON TRACK | **Phase:** 4 — Security Hardening
 > **Hackathon:** OxBuild | **Deadline:** TBD | **Stack:** Python · LangGraph · MCP · aiogram · E2B · Supabase
 
 ---
@@ -8,9 +8,9 @@
 
 | Metric | Value |
 |---|---|
-| **Overall Progress** | 40% `████████░░░░░░░░░░░░` |
-| **Phase** | 3 of 5 — Telegram Interface & Live UX |
-| **Current Focus** | aiogram handlers + Edit Queue + Live Streaming |
+| **Overall Progress** | 60% `████████████░░░░░░░░` |
+| **Phase** | 4 of 5 — Security Hardening |
+| **Current Focus** | Prompt Injection Defense + Sandbox Verification |
 | **Oxlo API Calls / Request** | Target: 6–14 calls (hackathon scoring) |
 | **Latency Target** | < 3,750ms (happy path, 1 audit cycle) |
 | **Hard Blocker** | None — awaiting first commit |
@@ -140,28 +140,28 @@
 ### 📱 PHASE 3: TELEGRAM INTERFACE LAYER
 
 #### **3.1 Edit Queue (Live Terminal UX)**
-- [ ] Implement `bot/utils/edit_queue.py` — debounced `EditQueue` class
+- [x] Implement `bot/utils/edit_queue.py` — debounced `EditQueue` class
   - `skill: fp-backend`
   - **DoD:** `pytest tests/test_edit_queue.py` confirms: (a) two pushes within 1.2s result in exactly 1 Telegram edit call; (b) `flush()` always sends the latest pending text; (c) exception in `_do_edit` is silently swallowed (no crash)
 
 #### **3.2 Middleware Stack**
-- [ ] Implement `bot/middleware/rate_limiter.py` — `RateLimitMiddleware`
+- [x] Implement `bot/middleware/rate_limiter.py` — `RateLimitMiddleware`
   - `skill: api-security-best-practices`
   - **DoD:** 6th request within 60s receives `⚠️ Rate limit` reply; 1st request after 60s window resets is accepted; DB `rate_limits` table updated correctly on every call
-- [ ] Implement `bot/middleware/session_loader.py` — upsert user + session on each message
+- [x] Implement `bot/middleware/session_loader.py` — upsert user + session on each message
   - `skill: api-endpoint-builder`
   - **DoD:** New `telegram_id` creates `users` row + `sessions` row; existing `telegram_id` updates `last_active_at`; `session_id` injected into handler `data` dict
 
 #### **3.3 Message Handler**
-- [ ] Implement `bot/handlers/message_handler.py` — main conversation handler
+- [x] Implement `bot/handlers/message_handler.py` — main conversation handler
   - `skill: ai-agents-architect`
   - **DoD:** Handler (1) sends initial `⏳ Initializing Oxlo-Sentinel Swarm...` message, (2) captures `message_id`, (3) creates `EditQueue`, (4) invokes `sentinel_graph.astream_events()`, (5) pushes each `on_chain_end` status to queue, (6) calls `queue.flush()` on completion, (7) persists result to `audit_logs`
-- [ ] Implement `bot/handlers/error_handler.py` — global exception handler
+- [x] Implement `bot/handlers/error_handler.py` — global exception handler
   - `skill: fp-backend`
   - **DoD:** Any unhandled exception sends `"❌ Internal error. Our team has been notified."` to user; full traceback logged to stdout (not to Telegram); bot does not crash
 
 #### **3.4 Bot Entrypoint**
-- [ ] Implement `bot/main.py` — aiogram dispatcher + middleware registration + long-poll start
+- [x] Implement `bot/main.py` — aiogram dispatcher + middleware registration + long-poll start
   - `skill: fp-backend`
   - **DoD:** `python -m bot.main` starts successfully; bot responds to `/start` with welcome message; E2B sandbox is pre-warmed during `startup` event (before first user message); graceful shutdown kills E2B sandbox on `SIGTERM`
 
