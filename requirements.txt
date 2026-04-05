@@ -1,0 +1,14 @@
+aiogram>=3.26.0
+langgraph>=0.2.55
+langchain-core>=0.3.28
+openai>=1.54.0
+mcp>=1.2.0
+fastmcp>=1.0.0
+e2b-code-interpreter>=1.0.3
+asyncpg>=0.30.0
+supabase>=2.10.0
+pydantic-settings>=2.7.0
+pydantic>=2.10.1
+python-dotenv>=1.0.1
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

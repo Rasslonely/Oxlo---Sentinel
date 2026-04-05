@@ -36,7 +36,7 @@ This application runs purely as a background worker on environments like Railway
 ### 1. Prerequisites
 Ensure you have Python 3.11+ installed.
 ```bash
-git clone https://github.com/xxx/oxlo-sentinel.git
+git clone https://github.com/Rasslonely/Oxlo---Sentinel.git
 cd oxlo-sentinel
 pip install -e .
 ```
