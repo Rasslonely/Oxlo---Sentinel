@@ -37,12 +37,6 @@ class Settings(BaseSettings):
 
 
 # Singleton instance for the entire app
-try:
-    settings = Settings()
-except Exception as e:
-    # This will catch missing .env or missing variables at startup
-    print(f"ERROR: Configuration validation failed: {e}")
-    # In production, we want to fail fast. 
-    # For now, we provide the singleton for import, but it will error on use if validation fails.
-    # We will handle the actual validation check in bot/main.py or similar entrypoint.
-    settings = None
+# Validation happens immediately upon import. 
+# If any required ENV var is missing, the app will crash with a detailed Pydantic error.
+settings = Settings()
