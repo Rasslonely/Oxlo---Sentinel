@@ -26,7 +26,8 @@ class RateLimitMiddleware(BaseMiddleware):
             return await handler(event, data)
 
         user_id = event.from_user.id
-        now = datetime.utcnow()
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
 
         # 1. Fetch current rate limit state
         # (Using raw SQL for atomic update or fetch)

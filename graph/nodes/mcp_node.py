@@ -1,94 +1,83 @@
 # graph/nodes/mcp_node.py
-"""
-Node 3 — MCP Tool Caller.
-Checks each hypothesis for Python code; executes via MCP client bridge.
-"""
+import re
 import asyncio
-import json
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from openai import AsyncOpenAI
+from mcp_server.tools.python_sandbox import execute_python_in_sandbox
 from graph.state import SentinelState
+from config.settings import settings
 
+# --- Initialization ---
+oxlo_client = AsyncOpenAI(
+    api_key=settings.OXLO_API_KEY,
+    base_url=settings.OXLO_BASE_URL,
+)
 
 async def mcp_node(state: SentinelState) -> dict:
     """
-    For each hypothesis that contains a Python code block,
-    invoke the MCP execute_python tool and collect results.
+    Node 3 — MCP Tool Caller & Internal Debugger.
+    Executes Python code from hypotheses. If errors occur, it attempts to 
+    self-correct the code (Multi-Attempt Loop) to improve verification accuracy.
     """
     hypotheses = state.get("agent_hypotheses", [])
-    
-    # 1. Filter code to run
-    code_to_run = [
-        (h["model_id"], h["extracted_code"]) 
-        for h in hypotheses if h["extracted_code"]
-    ]
+    # Extract code and model ID for context
+    code_to_run = [(h["model_id"], h["extracted_code"]) for h in hypotheses if h.get("extracted_code")]
+    debug_count = state.get("debug_attempts", 0)
+    status_messages = state.get("status_messages", [])
 
-    # No code found — skip node
     if not code_to_run:
-        status = "🔍 No code blocks found — skipping sandbox"
         return {
             "sandbox_logs": None,
             "sandbox_success": False,
-            "status_messages": state.get("status_messages", []) + [status]
+            "status_messages": status_messages + ["🔍 No code blocks found — skipping sandbox"]
         }
-
-    # 2. Spawning MCP Server
-    # Using stdio transport for inter-node tool invocation
-    server_params = StdioServerParameters(
-        command="python",
-        args=["-m", "mcp_server.server"],
-    )
 
     all_outputs: list[str] = []
     overall_success = True
-
-    try:
-        # Connect to the local MCP server via stdio
-        async with stdio_client(server_params) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-
-                # Process all code blocks
-                for i, (model_id, code) in enumerate(code_to_run):
-                    # Call the tool defined in mcp_server/server.py
-                    result = await session.call_tool(
-                        "execute_python",
-                        arguments={"code": code, "timeout_seconds": 15},
-                    )
-                    
-                    # 3. Parse Tool Response
-                    # FastMCP returns content as a list of TextContent objects
-                    raw = result.content[0].text if result.content else "{}"
-                    parsed = json.loads(raw)
-
-                    status_icon = "✅" if parsed.get("success") else "❌"
-                    execution_time = parsed.get("execution_time_ms", 0)
-                    
-                    # Log the results for the Auditor
-                    all_outputs.append(
-                        f"### Sandbox Run {i+1} [{status_icon} {execution_time}ms] — Model: {model_id}\n"
-                        f"STDOUT:\n{parsed.get('stdout', '')}\n"
-                        f"STDERR:\n{parsed.get('stderr', '')}"
-                    )
-                    
-                    # Overall success tracking
-                    if not parsed.get("success"):
-                        overall_success = False
-
-        combined_logs = "\n\n".join(all_outputs)
-        status = f"🛠️ MCP Python Sandbox executed {len(code_to_run)} script(s)"
-
-        return {
-            "sandbox_logs": combined_logs,
-            "sandbox_success": overall_success,
-            "status_messages": state.get("status_messages", []) + [status]
-        }
+    
+    # Process each code block
+    for i, (model_id, code) in enumerate(code_to_run):
+        # 1. Execute initial code
+        result = await execute_python_in_sandbox(code, timeout_seconds=15)
         
-    except Exception as e:
-        # Critical error — log the failure to the state
-        status = f"❌ MCP Server Error: {str(e)}"
-        return {
-            "sandbox_logs": f"CRITICAL TOOLING FAILURE: {str(e)}",
-            "sandbox_success": False,
-            "status_messages": state.get("status_messages", []) + [status]
-        }
+        # 2. Self-Debugging Loop (If failed and has retries)
+        if not result.get("success") and debug_count < 2:
+            try:
+                # Ask a fast model to fix the code
+                coro = oxlo_client.chat.completions.create(
+                    model="llama-3.2-3b",
+                    messages=[
+                        {"role": "system", "content": "You are a Python Debugger. Fix this code to solve the user's error. RESPOND ONLY WITH A REPLACEMENT ```python CODE BLOCK."},
+                        {"role": "user", "content": f"MODEL_ID: {model_id}\nCODE:\n{code}\n\nERROR:\n{result.get('stderr')}"}
+                    ],
+                    temperature=0.0
+                )
+                fix_res = await asyncio.wait_for(coro, timeout=10.0)
+                fixed_content = fix_res.choices[0].message.content or ""
+                fixed_code_match = re.search(r"```(?:python)?\s*\n(.*?)```", fixed_content, re.DOTALL)
+                
+                if fixed_code_match:
+                    fixed_code = fixed_code_match.group(1).strip()
+                    # Re-run fixed code
+                    result = await execute_python_in_sandbox(fixed_code, timeout_seconds=15)
+                    debug_count += 1
+            except Exception:
+                pass # Fallback to original failure if debugger fails
+
+        # 3. Collect Results
+        status_icon = "✅" if result.get("success") else "❌"
+        all_outputs.append(
+            f"### Sandbox Run {i+1} [{status_icon} {result.get('execution_time_ms')}ms] — Model: {model_id}\n"
+            f"STDOUT:\n{result.get('stdout', '')}\n"
+            f"STDERR:\n{result.get('stderr', '')}"
+        )
+        if not result.get("success"):
+            overall_success = False
+
+    combined_logs = "\n\n".join(all_outputs)
+    
+    return {
+        "sandbox_logs": combined_logs,
+        "sandbox_success": overall_success,
+        "debug_attempts": debug_count,
+        "status_messages": status_messages + [f"🛠️ MCP Sandbox executed {len(code_to_run)} script(s) (Self-Fixes: {debug_count})"]
+    }

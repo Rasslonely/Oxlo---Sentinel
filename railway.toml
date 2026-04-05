@@ -1,0 +1,14 @@
+# railway.toml
+# Oxlo-Sentinel: Deployment Configuration for Railway
+# This project runs as a background worker (no public HTTP port required).
+
+[build]
+builder = "NIXPACKS"
+
+[deploy]
+startCommand = "python -m bot.main"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+PYTHONUNBUFFERED = "1"

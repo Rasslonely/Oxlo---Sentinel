@@ -1,5 +1,6 @@
 # graph/nodes/router_node.py
 import re
+from typing import Optional
 from openai import AsyncOpenAI
 from graph.state import SentinelState
 from config.settings import settings
@@ -12,7 +13,7 @@ oxlo_client = AsyncOpenAI(
 )
 
 # --- Configuration ---
-ROUTER_MODEL = "llama-3.2-3b-instruct" # Fast classifier
+ROUTER_MODEL = "llama-3.2-3b" # Fast classifier
 
 ROUTER_SYSTEM_PROMPT = """You are a classification engine for a Hivemind.
 Classify the user's intent into exactly one of two categories:
@@ -79,14 +80,58 @@ def sanitize_user_input(text: str) -> str:
     return text[:2000].strip()
 
 
+def find_flash_intent(text: str) -> Optional[str]:
+    """
+    Heuristic check for trivial intents that don't need a model to decide.
+    Generalized for any language - focused ONLY on pure arithmetic and greetings.
+    """
+    clean = text.strip().lower()
+    
+    # 1. Pure Arithmetic & Scientific (e.g., 1+1, sin 90, log 10, sqrt 16)
+    # We only auto-flash if it's strictly mathematical notation.
+    if re.fullmatch(r"^[0-9 \+\-\*\/\(\)\.\,e\^]+$|^(sin|cos|tan|log|ln|sqrt|pi|abs|pow)\b.*", clean):
+        return "chat"
+    
+    # 2. Minimal Greetings
+    if re.fullmatch(r"^(hi|hello|hey|bot|sentinel|ping|test)([\!\?\.]+)?$", clean):
+        return "chat"
+        
+    return None
+
+
 async def router_node(state: SentinelState) -> dict:
     """
     Node 1 — The Router.
     Classify the query to decide between 'Flash Response' and 'Cognitive Swarm'.
     """
-    user_query = state.get("user_query", "")
-    
-    # 1. Layer 1: Regex Guard
+    user_query = state.get("user_query", "").strip()
+    user_mode = state.get("user_mode")
+
+    # --- 1. Manual Overrides (Explicit Mode Choice) ---
+    if user_mode == "think":
+        return {
+            "route": "complex",
+            "status_messages": state.get("status_messages", []) + ["🧠 [THINK] Explicit mode requested"],
+            "user_query": user_query
+        }
+    elif user_mode == "fast":
+        return {
+            "route": "chat",
+            "status_messages": state.get("status_messages", []) + ["⚡ [FAST] Explicit mode requested"],
+            "user_query": user_query
+        }
+
+    # --- 2. Flash Interceptor (Premium UX / Autonomous) ---
+    flash_route = find_flash_intent(user_query)
+    if flash_route:
+        return {
+            "route": flash_route,
+            "status_messages": state.get("status_messages", []) + ["⚡ [FLASH] Trivial query detected"],
+            "user_query": user_query
+        }
+
+    # --- 2. Advanced Security Guard ---
+    # Layer 1: Regex Guard
     try:
         clean_query = sanitize_user_input(user_query)
     except ValueError as e:
@@ -96,7 +141,7 @@ async def router_node(state: SentinelState) -> dict:
             "messages": [("assistant", f"⚠️ **Security Alert**: {str(e)}")]
         }
 
-    # 2. Layer 2: Model Guard (Semantic Security & Safety)
+    # Layer 2: Model Guard (Semantic Security & Safety)
     is_malicious = await model_based_sanitizer(clean_query)
     if is_malicious:
         return {
@@ -105,7 +150,7 @@ async def router_node(state: SentinelState) -> dict:
             "messages": [("assistant", "⚠️ **Security/Safety Alert**: This request has been flagged by the Sentinel-Audit layer as potentially malicious or unsafe.")]
         }
 
-    # 3. Intent Classification (Path selection)
+    # --- 3. Model-Based Intent Classification ---
     response = await oxlo_client.chat.completions.create(
         model=ROUTER_MODEL,
         messages=[
@@ -117,9 +162,10 @@ async def router_node(state: SentinelState) -> dict:
     )
     
     raw_route = (response.choices[0].message.content or "").strip().lower()
+    # Be more aggressive about 'chat' unless it's clearly 'complex'
     route = "complex" if "complex" in raw_route else "chat"
 
-    # 3. Telemetry
+    # Telemetry
     status = f"[🧭 Router → {route.upper()}]"
     
     return {

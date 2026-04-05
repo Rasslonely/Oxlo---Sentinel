@@ -44,6 +44,11 @@ class SentinelState(TypedDict):
 
     # --- UI Streaming ---
     # Ordered log of progress messages for the live Telegram edit queue
+    user_mode: Optional[str]  # 'think' or 'fast'
+    # --- Cerebro Core (v3.0 Logic Memory) ---
+    retrieved_logic: Optional[str]  # Past "Golden Logic" retrieved from Vector DB
+    debug_attempts: int             # Internal sandbox loop counter
+    short_circuit: bool             # GPT-Speed Path: Skip Swarm if primary is confident
     status_messages: list[str]
 
     # --- Persistence ---

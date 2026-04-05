@@ -27,7 +27,17 @@
 
 1. **Telegram Rate Limits on Message Edits** → Debounced edit queue: buffer state updates and flush every 1.2 seconds, not on every `astream_events` callback.
 2. **E2B Sandbox Cold Start Latency (~2s)** → Pre-warm sandbox on bot startup; reuse session across requests within a 10-minute TTL window.
-3. **LangGraph Infinite Loop Risk** → Hard cap: `max_audit_cycles = 3`. After 3 Auditor rejections, force synthesis with best available hypothesis and flag "UNVERIFIED" in output.
+3. **LangGraph Infinite Loop Risk** → Hard cap: `max_audit_cycles = 2`. After 2 Auditor rejections, force synthesis with best available hypothesis and flag "UNVERIFIED" in output.
+
+### 1a. Architecture Evolution: True Swarm & Strict Isolation
+
+Following initial deployment, three critical logic deadlocks were discovered and eliminated in the core refactors:
+1. **True Parallel Generation**: Replaced sequential iteration with strict `asyncio.gather` for the `generator_node`. The swarm models now truly run in parallel, avoiding API serialization lag.
+2. **Sandbox Enforcement Protocol**: The Swarm Prompt was fundamentally rewritten. Generators are now strictly forbidden from using "raw text" logic for complex data. They are mandated to output Python scripts, forcing the E2B Sandbox to become the ultimate arbiter of truth.
+3. **Deadlock & Stroke Protection**: 
+   - Global Watchdog increased to `300s` (5 minutes) to safely allow deep API-latency multi-cycle debates. 
+   - All background API tasks (e.g., `Auditor`, `Pre-Cognition`, `Memory Committer`, `Debug Loops`) are securely wrapped in `asyncio.wait_for` micro-locks (< 20s). If Oxlo APIs suffer from 429 Too Many Requests or 502 Gateway errors, the specific sub-node degrades gracefully and passes the baton, preventing the entire graph from dying quietly.
+4. **Resilient Data Extraction**: Upgraded code block parsers to `r"```(?:python)?\s*\n(.*?)```"` to bulletproof Sandbox extraction against LLMs that lazily drop markdown tags.
 
 ---
 

@@ -38,7 +38,7 @@ key = os.environ.get("OXLO_API_KEY", "NOT_FOUND")
 print(f"KEY_STATUS:{key}")
 """
     result = await execute_python_in_sandbox(code)
-    assert "KEY_STATUS:NOT_FOUND" in result["stdout"]
+    assert "KEY_STATUS:NOT_FOUND" in result["stdout"], f"Expected 'KEY_STATUS:NOT_FOUND' in stdout, but got: '{result['stdout']}' (Stderr: {result['stderr']})"
 
 
 @pytest.mark.asyncio

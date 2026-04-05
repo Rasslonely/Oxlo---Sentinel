@@ -10,23 +10,37 @@ from bot.utils.edit_queue import EditQueue
 router = Router()
 
 
+# --- State Storage (In-memory for hackathon speed) ---
+USER_MODES = {}
+
+
 # --- Command Handlers ---
 @router.message(Command("start"))
 async def cmd_start(message: types.Message):
     """Welcome message and initialization guide."""
     welcome_text = (
-        "🚀 **Oxlo-Sentinel: The Cognitive AI Swarm**\n\n"
-        "Welcome to the hivemind. I use a parallel swarm of models "
-        "(DeepSeek-V3.2, Mistral, Llama-3.2) and a secure E2B Python sandbox "
-        "to verify math/logic/coding queries.\n\n"
-        "💡 **How to use:**\n"
-        "- Send any reasoning question.\n"
-        "- Watch the 'Live Terminal' as the swarm debates.\n"
-        "- Get a verified answer with model attribution.\n"
-        "\n"
-        "Try: `Calculate prime factors of 123456789`"
+        "🚀 **Oxlo-Sentinel: The Cognitive AI Hivemind**\n\n"
+        "Welcome to the hivemind. I use a dual-mode engine for speed and precision:\n\n"
+        "⚡ **Flash Mode**: Instant (<1s) answers for simple math and chat.\n"
+        "🧠 **Thinking Mode**: Parallel Swarm debate + MCP Sandbox for complex reasoning.\n\n"
+        "💡 **Commands:**\n"
+        "- `/think`: Force the Deep Swarm for your next question.\n"
+        "- `/fast`: Force a Flash response for speed.\n\n"
+        "Try: `What is 1+1*0?` or `Calculate the entropy of a black hole.`"
     )
     await message.answer(welcome_text, parse_mode="Markdown")
+
+
+@router.message(Command("think"))
+async def cmd_think(message: types.Message):
+    USER_MODES[message.chat.id] = "think"
+    await message.answer("🧠 **Mode: Deep Thinking enabled.**\nYour next question will invoke the full model swarm.")
+
+
+@router.message(Command("fast"))
+async def cmd_fast(message: types.Message):
+    USER_MODES[message.chat.id] = "fast"
+    await message.answer("⚡ **Mode: Flash Response enabled.**\nI will prioritize speed and instant answers.")
 
 
 # --- Main Hivemind Handler ---
@@ -34,10 +48,15 @@ async def cmd_start(message: types.Message):
 async def handle_query(message: types.Message, user_uuid: str, session_id: str):
     """
     Main entry point for all cognitive queries.
-    Bridges aiogram to the LangGraph astream_events engine.
     """
+    current_mode = USER_MODES.get(message.chat.id, None)
+    
+    # Reset mode after one use to keep the bot autonomous by default
+    if current_mode:
+        USER_MODES.pop(message.chat.id)
+
     # 1. Initial Status Message
-    status_msg = await message.answer("⏳ **Initializing Oxlo-Sentinel Swarm...**", parse_mode="Markdown")
+    status_msg = await message.answer("⏳ **Initializing Oxlo-Sentinel...**", parse_mode="Markdown")
     
     # 2. Setup Live Terminal (Edit Queue)
     queue = EditQueue(message.bot, message.chat.id, status_msg.message_id)
@@ -45,6 +64,7 @@ async def handle_query(message: types.Message, user_uuid: str, session_id: str):
     # 3. Preparation State
     initial_state = {
         "user_query": message.text,
+        "user_mode": current_mode,
         "telegram_chat_id": message.chat.id,
         "telegram_message_id": status_msg.message_id,
         "session_id": session_id,
@@ -52,49 +72,52 @@ async def handle_query(message: types.Message, user_uuid: str, session_id: str):
         "messages": [("user", message.text)]
     }
 
-    # 4. Invoke LangGraph with Event Streaming
+    # 4. Invoke LangGraph with Event Streaming (v2.4 Global Watchdog)
+    final_output = None
     try:
-        # We use astream_events to capture node-level status changes in real-time
-        async for event in sentinel_graph.astream_events(initial_state, version="v1"):
-            kind = event["event"]
-            
-            # --- Status Updates ---
-            # Every time a node modifies the 'status_messages' list, we push it to the Telegram EditQueue
-            if kind == "on_chain_end" and event["name"] == "LangGraph":
-                # Final state received
-                final_state = event["data"]["output"]
-                status_list = final_state.get("status_messages", [])
-                
-                # Format current status stack for the "Live Terminal"
-                display_text = "🧠 **Oxlo-Sentinel Hivemind Activity:**\n"
-                display_text += "\n".join(f"- {s}" for s in status_list)
-                
-                await queue.push(display_text)
-                await queue.show_typing() # Show typing while waiting for the next node activity
+        # Flexible 300s cap for the entire swarm operation to allow multi-cycle debates during API congestion
+        async with asyncio.timeout(300.0):
+            async for event in sentinel_graph.astream_events(initial_state, version="v1"):
+                kind = event["event"]
+                if kind == "on_chain_end":
+                    data = event.get("data", {})
+                    output = data.get("output", {})
+                    if isinstance(output, dict) and "status_messages" in output:
+                        final_output = output # Capture latest state
+                        status_list = output.get("status_messages", [])
+                        display_text = "🧠 **Oxlo-Sentinel Hivemind Activity:**\n"
+                        display_text += "\n".join(f"- {s}" for s in status_list)
+                        await queue.push(display_text)
 
-            # --- Final Answer Composition ---
-            # Node 5 (Synthesizer) will produce the final AIMessage
-            if kind == "on_chat_model_end":
-                # Could capture intermediate streaming tokens here for even more "live" feel
-                pass
-
-        # 5. Final Flush + Cleanup
-        # (The synthesizer will have added the final Markdown AIMessage to the list)
-        # We manually fetch the final output from the graph's terminal state
-        final_output = await sentinel_graph.ainvoke(initial_state)
-        
-        final_answer = ""
-        if final_output["messages"]:
+        # 5. Extract and Deliver Final Answer
+        if final_output and "messages" in final_output and final_output["messages"]:
             final_answer = final_output["messages"][-1].content
+            await queue.flush()
+            
+            # Robust Edit with Markdown Fallback
+            try:
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=status_msg.message_id,
+                    text=final_answer,
+                    parse_mode="Markdown"
+                )
+            except Exception:
+                # Fallback to plain text if Markdown parsing fails
+                await message.bot.edit_message_text(
+                    chat_id=message.chat.id,
+                    message_id=status_msg.message_id,
+                    text=final_answer,
+                    parse_mode=None
+                )
+        else:
+            raise ValueError("Swarm execution completed but no message was generated.")
 
-        # One final push to ensures the latest status is visible before the answer
+    except asyncio.TimeoutError:
+        error_text = "❌ **Swarm Execution Timeout**\n\nThe Hivemind took too long (60s+) to reach a consensus. Please try again or use `/fast` for an instant response."
+        await queue.push(error_text)
         await queue.flush()
-        
-        # Send the finalized answer as a new message (or replace the status if you prefer)
-        await message.answer(final_answer, parse_mode="Markdown")
-
     except Exception as e:
-        # Global Error Handling for the Swarm
         error_text = f"❌ **Swarm Execution Error**\n\n{str(e)}"
         await queue.push(error_text)
         await queue.flush()

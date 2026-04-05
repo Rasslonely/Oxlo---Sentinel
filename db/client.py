@@ -1,6 +1,7 @@
 # db/client.py
 import asyncpg
 import asyncio
+from typing import Optional
 from config.settings import settings
 
 
@@ -25,6 +26,7 @@ class Database:
                 min_size=2,
                 max_size=10,
                 max_inactive_connection_lifetime=300.0,
+                statement_cache_size=0, # Required for PgBouncer / Supabase Pooler
             )
         return cls._pool
 
@@ -50,6 +52,13 @@ class Database:
             return await conn.fetch(query, *args)
 
     @classmethod
+    async def fetch_val(cls, query: str, *args):
+        """Fetch a single value from the database (first column of the first row)."""
+        pool = await cls.get_pool()
+        async with pool.acquire() as conn:
+            return await conn.fetchval(query, *args)
+
+    @classmethod
     async def execute(cls, query: str, *args):
         """Execute a command (INSERT, UPDATE, DELETE)."""
         pool = await cls.get_pool()
@@ -59,3 +68,10 @@ class Database:
 
 # Singleton instance for simple import
 db = Database()
+
+# --- Supabase Client (For High-Level RAG / Vector Ops) ---
+from supabase import create_client, Client
+if settings and settings.SUPABASE_URL and settings.SUPABASE_ANON_KEY:
+    supabase: Client = create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+else:
+    supabase = None
