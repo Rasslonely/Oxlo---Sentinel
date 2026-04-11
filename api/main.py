@@ -30,6 +30,25 @@ class ChatRequest(BaseModel):
 async def health_check():
     return {"status": "healthy", "version": "1.0.0"}
 
+@app.get("/debug/info")
+async def debug_info():
+    """Diagnostic endpoint to check environment variables status (masked)."""
+    def mask(val: str) -> str:
+        if not val: return "MISSING"
+        if len(val) < 8: return f"SET (Length: {len(val)})"
+        return f"{val[:4]}...{val[-4:]} (Length: {len(val)})"
+
+    return {
+        "status": "online",
+        "environment_diagnostics": {
+            "OXLO_API_KEY": mask(settings.OXLO_API_KEY),
+            "OXLO_BASE_URL": settings.OXLO_BASE_URL,
+            "E2B_API_KEY": mask(settings.E2B_API_KEY),
+            "TELEGRAM_BOT_TOKEN": mask(settings.TELEGRAM_BOT_TOKEN),
+            "DATABASE_CONNECTED": bool(settings.DATABASE_URL)
+        }
+    }
+
 async def stream_graph_updates(user_query: str, session_id: str) -> AsyncGenerator[str, None]:
     """
     Invokes the LangGraph and yields SSE events for each status update.

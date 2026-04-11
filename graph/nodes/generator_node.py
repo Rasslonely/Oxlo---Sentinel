@@ -83,9 +83,10 @@ async def _call_single_model(model_id: str, user_query: str, retries: int = 3, i
                 break
 
     # If we get here, all retries failed or it was a non-retriable error
+    error_msg = str(last_err)
     return Hypothesis(
         model_id=model_id,
-        content=f"ERROR: Model failed — {str(last_err)}",
+        content=f"ERROR: Model failure — {error_msg}",
         extracted_code=None,
         confidence=0.0
     )
