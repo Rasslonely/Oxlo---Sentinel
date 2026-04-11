@@ -90,6 +90,11 @@ venv.bak/
 .spyderproject
 .spyproject
 
+# Git cleanup
+node_modules/
+dist/
+coverage/
+
 # Rope project settings
 .ropeproject
 
