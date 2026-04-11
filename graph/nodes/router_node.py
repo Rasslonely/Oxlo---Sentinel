@@ -99,8 +99,8 @@ def find_flash_intent(text: str) -> Optional[str]:
     if re.fullmatch(r"^[0-9 \+\-\*\/\(\)\.\,e\^]+$|^(sin|cos|tan|log|ln|sqrt|pi|abs|pow)\b.*", clean):
         return "chat"
     
-    # 2. Minimal Greetings
-    if re.fullmatch(r"^(hi|hello|hey|bot|sentinel|ping|test)([\!\?\.]+)?$", clean):
+    # 2. Minimal Greetings & Short-Hand (Resource Conservation Mode)
+    if re.search(settings.SKIP_ROUTER_REGEX, clean):
         return "chat"
         
     return None

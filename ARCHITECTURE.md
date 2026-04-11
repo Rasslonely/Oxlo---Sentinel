@@ -74,10 +74,15 @@ graph TD
 
         N1 -->|"route=complex"| N2
         N1 -->|"route=chat"| N5
-        N2 -->|"hypotheses"| N3
-        N3 -->|"sandbox_logs"| N4
-        N4 -->|"retry"| N2
-        N4 -->|"voted"| N5
+        N2 --> N3
+        N3 -->|"economy=on & success=true"| N5
+        N3 -->|"default"| N4
+        N4 -->|"verify"| N5
+        N5 --> N6
+
+        subgraph "MEMORY LAYER"
+            N6["Node 6: Committer<br/>Cerebro RAG Write"]
+        end
     end
 
     subgraph "MCP TOOLING LAYER"

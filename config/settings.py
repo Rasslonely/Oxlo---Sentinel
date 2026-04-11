@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     MAX_AUDIT_CYCLES: int = 3
     RATE_LIMIT_PER_MINUTE: int = 5
     OXLO_MAX_CONCURRENCY: int = 3   # Relaxed limit for web swarm responsiveness
+    OXLO_ECONOMY_MODE: bool = True  # Karpathy Optimization: Use single model if True
+    SKIP_ROUTER_REGEX: str = r"(?i)^(hi|hello|halo|hola|thanks|terima kasih|ok|p|oi)\b"
     SANDBOX_TTL_SECONDS: int = 600
     LOG_LEVEL: str = "INFO"
 

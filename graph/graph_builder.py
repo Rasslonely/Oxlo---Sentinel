@@ -3,6 +3,7 @@
 Oxlo-Sentinel LangGraph Topology.
 Assembles the hivemind state machine with cyclic auditing and dual-path routing.
 """
+from config.settings import settings
 from langgraph.graph import StateGraph, END
 from graph.state import SentinelState
 from graph.nodes.router_node import router_node
@@ -26,6 +27,17 @@ def _route_after_router(state: SentinelState) -> str:
     if state.get("route") == "chat":
         return "synthesizer"
     return "pre_cognition"
+
+
+def _route_after_mcp(state: SentinelState) -> str:
+    """
+    Budget Guard: If in Economy Mode and Sandbox is 100% successful,
+    skip the expensive Auditor node to save API calls.
+    """
+    sandbox_success = state.get("sandbox_success", False)
+    if settings.OXLO_ECONOMY_MODE and sandbox_success:
+        return "synthesizer"
+    return "auditor"
 
 
 def _route_after_audit(state: SentinelState) -> str:
@@ -73,7 +85,16 @@ def build_sentinel_graph() -> StateGraph:
     # 4. Cerebro Memory Integration
     builder.add_edge("pre_cognition", "generator")
     builder.add_edge("generator", "mcp_tool")
-    builder.add_edge("mcp_tool", "auditor")
+    
+    # 4.5 Budget Guard: Conditional Audit
+    builder.add_conditional_edges(
+        "mcp_tool",
+        _route_after_mcp,
+        {
+            "auditor": "auditor",
+            "synthesizer": "synthesizer"
+        }
+    )
 
     # 5. The Audit Loop
     builder.add_conditional_edges(

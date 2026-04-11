@@ -138,16 +138,22 @@ async def generator_node(state: SentinelState) -> dict:
                     confidence=0.0
                 )
 
+    # 0. Economy Mode Filter (Resource Conservation)
+    models_to_launch = GENERATOR_MODELS
+    if settings.OXLO_ECONOMY_MODE:
+        models_to_launch = [GENERATOR_MODELS[0]] # Use only DeepSeek for Free Tier
+        status_messages.append("📉 Economy Mode: Single-model swarm active")
+
     # 1. Prepare tasks with Staggered Jitter (Karpathy-Sentinel Optimization)
     # We don't use a raw loop to avoid serializing the whole thing.
     # We launch them slightly apart to prevent Oxlo 429 Burst limits.
     tasks = []
-    for i, mid in enumerate(GENERATOR_MODELS):
+    for i, mid in enumerate(models_to_launch):
         is_skeptic = (i == 1) # SKEPTIC role to second model
         tasks.append(_safe_call(mid, is_skeptic))
         
         # Stagger the launch by 500ms
-        if i < len(GENERATOR_MODELS) - 1:
+        if i < len(models_to_launch) - 1:
             await asyncio.sleep(0.5)
 
     # 2. Parallel Wait for the slowest logic chain to finish
