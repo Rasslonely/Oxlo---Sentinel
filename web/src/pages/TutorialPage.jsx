@@ -18,7 +18,7 @@ const STEPS = [
     desc: 'Send any complex question or logical claim. The bot immediately posts a live-edited "thinking" message.',
     terminal: [
       { type: 'user', text: 'Is 127 prime? Prove it.' },
-      { type: 'bot',  text: '⚡ Swarm Active…\n🧠 Routing → complex\n✦ 2 models debating in parallel…' },
+      { type: 'bot',  text: '⚡ Swarm Active…\n🧠 Routing → complex\n✦ 2 models debating in swarm…' },
     ],
   },
   {

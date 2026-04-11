@@ -6,7 +6,7 @@ import ArchitectureGraph from '../components/ArchitectureGraph'
 const TECH_STACK = [
   { icon: Cpu,       label: 'LangGraph',      desc: 'Stateful cyclic agent graph with conditional edges and astream_events',   tag: 'ORCHESTRATION', color: '#00f3ff' },
   { icon: Shield,    label: 'Omniscient Shield', desc: 'Centralized asyncio.Semaphore(1) protecting all AI inference calls', tag: 'THROTTLING',     color: '#00e87a' },
-  { icon: Zap,       label: 'Oxlo API',        desc: 'Adaptive swarm scaling: fires 2–4 parallel model calls per query', tag: 'AI INFERENCE',   color: '#ff006e' },
+  { icon: Zap,       label: 'Oxlo API',        desc: 'Adaptive swarm scaling: fires 2–4 staggered model calls per query', tag: 'AI INFERENCE',   color: '#ff006e' },
   { icon: Shield,    label: 'E2B Sandbox',     desc: 'Hardware-isolated Python MicroVM — verified execution, zero hallucination', tag: 'VERIFICATION', color: '#00e87a' },
   { icon: Server,    label: 'FastAPI + SSE',   desc: 'Real-time streaming from swarm nodes to the web chat interface',         tag: 'BACKEND',       color: '#7c5ff0' },
   { icon: Database,  label: 'Supabase',        desc: 'Managed PostgreSQL — sessions, chat_history, full audit_logs',           tag: 'DATABASE',      color: '#3bf17c' },
@@ -15,7 +15,7 @@ const TECH_STACK = [
 ]
 
 const DECISIONS = [
-  { q: 'Why 2 Models for Debate?',    a: 'We use a Principal Model (DeepSeek) and a Skeptic (Mistral). Parallelism reduces latency to the slowest model (~3s) while the clash of logic eliminates bias.' },
+  { q: 'Why 2 Models for Debate?',    a: 'We use a Principal Model (DeepSeek) and a Skeptic (Mistral). Staggered parallelism optimizes for low latency while the 500ms launch jitter prevents API rate-limit drops.' },
   { q: 'Why the Omniscient Shield?',  a: 'AI APIs have strict concurrency limits. The Shield serializes requests at the kernel level, ensuring 100% reliability on any account tier.' },
   { q: 'Why MCP over direct calls?',  a: 'MCP eliminates the N×M integration problem. Add one new tool to the MCP Server and every agent gains it instantly with zero code changes.' },
   { q: 'Why E2B over subprocess?',    a: 'E2B runs in a hardware-isolated MicroVM with no network access to host secrets — critical for safe Python code execution.' },

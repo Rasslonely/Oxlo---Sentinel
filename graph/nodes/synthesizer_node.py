@@ -111,15 +111,30 @@ async def synthesizer_node(state: SentinelState) -> dict:
             }
 
     # --- PATH B: COGNITIVE SWARM (~8s) ---
+    raw_hypotheses = state.get("agent_hypotheses", [])
     hypotheses = [
-        h for h in state.get("agent_hypotheses", []) 
+        h for h in raw_hypotheses 
         if "ERROR" not in h.get("content", "") and "Concurrency limit" not in h.get("content", "")
     ]
     
     if not hypotheses:
+        # Collect diagnostic info from the failed nodes
+        error_details = []
+        for h in raw_hypotheses:
+            content = h.get("content", "")
+            if "ERROR" in content:
+                error_details.append(f"- **{h.get('model_id')}**: {content}")
+        
+        error_msg = "\n".join(error_details) if error_details else "Unspecified system failure."
+        
         return {
             "status_messages": status_messages + ["❌ Swarm Failure"],
-            "messages": [AIMessage(content="❌ **Swarm Failure**: API Unavailable.")]
+            "messages": [AIMessage(content=(
+                "❌ **Swarm Failure: API Communication Interrupted**\n\n"
+                "The cognitive nodes failed to finalize an audit due to the following reasons:\n"
+                f"{error_msg}\n\n"
+                "💡 **Tip**: This usually indicates a rate limit (429) or transient provider outage."
+            ))]
         }
 
     # 1. Executive Summary Pass (v2.2: Human-First)

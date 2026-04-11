@@ -18,8 +18,8 @@ Sentinel uses a deeply modified **LangGraph** state machine running on pure `asy
 
 1. **Pre-Cognition (RAG Vector Memory):** 
 Retrieves historical logic patterns for similar problems via Supabase `pgvector` & `bge-large`.
-2. **True Parallel Generation:** 
-Fires multiple foundational models simultaneously (`deepseek-v3.2`, `mistral-7b`) using `asyncio.gather` for zero chronological latency.
+2. **Staggered Parallel Swarm:** 
+Fires foundational models (`deepseek-v3.2`, `mistral-7b`) using a **Staggered Jitter Pipeline** (500ms launch intervals). This Karpathy-Sentinel optimization prevents API Rate Limit (429) bursts while maintaining near-zero chronological latency for the user.
 3. **MCP E2B Hardware Isolation:** 
 The swarm is forced by system prompt to isolate numbers into `python` code blocks. Sentinel actively extracts the blocks via regex parsing, spins up a heavily isolated micro-server via E2B, executes the calculation, and retrieves the empirical truth.
 4. **The Auditor (DeepSeek-R1-8B):** 

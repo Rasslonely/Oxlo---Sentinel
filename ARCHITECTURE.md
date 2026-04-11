@@ -32,7 +32,7 @@
 ### 1a. Architecture Evolution: True Swarm & Strict Isolation
 
 Following initial deployment, three critical logic deadlocks were discovered and eliminated in the core refactors:
-1. **True Parallel Generation**: Replaced sequential iteration with strict `asyncio.gather` for the `generator_node`. The swarm models now truly run in parallel, avoiding API serialization lag.
+1. **Staggered Parallel Generation**: Replaced naive `asyncio.gather` with a **Staggered Launch Pipeline** (500ms jitter). The swarm models now fire slightly apart to prevent Oxlo 429 Burst limits while still maintaining near-simultaneous execution speed.
 2. **Sandbox Enforcement Protocol**: The Swarm Prompt was fundamentally rewritten. Generators are now strictly forbidden from using "raw text" logic for complex data. They are mandated to output Python scripts, forcing the E2B Sandbox to become the ultimate arbiter of truth.
 3. **Deadlock & Stroke Protection**: 
    - Global Watchdog increased to `300s` (5 minutes) to safely allow deep API-latency multi-cycle debates. 
@@ -67,9 +67,9 @@ graph TD
 
     subgraph "COGNITIVE ENGINE [LangGraph]"
         N1["Node 1: Router<br/>llama-3.2-3b<br/>Route: chat | complex"]
-        N2["Node 2: Divergent Generator<br/>asyncio.gather()<br/>DeepSeek-V3.2 + Mistral-7B"]
+        N2["Node 2: Staggered Generator<br/>500ms jitter loop<br/>DeepSeek-V3 + Mistral-7B"]
         N3["Node 3: MCP Tool Caller<br/>execute_python()"]
-        N4["Node 4: Auditor<br/>deepseek-r1-8b<br/>Consensus + Verdict"]
+        N4["Node 4: Auditor<br/>deepseek-r1<br/>Consensus + Verdict"]
         N5["Node 5: Synthesizer<br/>deepseek-v3.2<br/>Final Composer"]
 
         N1 -->|"route=complex"| N2

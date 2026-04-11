@@ -71,7 +71,7 @@ const TOOLTIPS = {
   api:  { t: 'FastAPI SSE Gateway', a: 'POST /api/chat endpoint streams LangGraph astream_events.', b: 'Converts Python async generators → Server-Sent Events for the browser.' },
   eq:   { t: 'EditQueue',           a: 'Debounces Telegram message edits to max 1 edit per 1.2s.', b: 'Prevents hitting Telegram flood-control limits during rapid swarm updates.' },
   n1:   { t: 'Router — Fast Path',  a: 'Classifies intent into "Flash" (Chat) or "Complex" (Reasoning) paths.', b: 'Directly triggers Synthesis for simple queries to save tokens and time.' },
-  n2:   { t: 'Divergent Generator', a: 'Fires swarm models in parallel using asyncio.gather.', b: 'Uses DeepSeek-v3.2 and Mistral-7b as primary hypothesis engines.' },
+  n2:   { t: 'Divergent Generator', a: 'Fires swarm models in staggered parallel using jitter delays.', b: 'Uses DeepSeek-v3.2 and Mistral-7b as primary hypothesis engines.' },
   n3:   { t: 'Skeptic Node',        a: 'The SKEPTIC role: hunts for logical traps and inconsistencies.', b: 'Critical for avoiding AI hallucinations in mathematical proofs.' },
   n4:   { t: 'MCP Tool Caller',     a: 'The "Hands" of the AI—executes Python scripts via MCP protocol.', b: 'Extracts code blocks from the swarm and runs them in the E2B Sandbox.' },
   n5:   { t: 'Auditor Node',        a: 'The "Brain"—A heavy reasoning model (DeepSeek-R1) that audits the sandbox output.', b: 'Controls the debate loop; can force models back to generation if logic fails.' },
