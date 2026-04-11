@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # --- Runtime Tuning ---
     MAX_AUDIT_CYCLES: int = 3
     RATE_LIMIT_PER_MINUTE: int = 5
+    OXLO_MAX_CONCURRENCY: int = 1   # Strict limit to prevent Hivemind 429s on free/hobby tiers
     SANDBOX_TTL_SECONDS: int = 600
     LOG_LEVEL: str = "INFO"
 

@@ -49,75 +49,70 @@ Following initial deployment, three critical logic deadlocks were discovered and
 graph TD
     subgraph "CLIENT LAYER"
         TG["📱 Telegram User<br/>(Mobile / Desktop)"]
+        WEB["🌐 Web User<br/>(React SPA)"]
     end
 
-    subgraph "INTERFACE LAYER [Railway Background Worker]"
-        AIO["aiogram 3.x<br/>Async Long-Polling Handler"]
+    subgraph "INTERFACE LAYER [Bridge]"
+        AIO["aiogram 3.x<br/>Async Bot Handler"]
+        FAST["FastAPI<br/>SSE Streaming Gateway"]
         EQ["Edit Queue<br/>Debounced @ 1.2s"]
-        AIO -->|"bot.edit_message_text()"| EQ
-        EQ -->|"Telegram Bot API"| TG
-        TG -->|"User Message"| AIO
+        
+        AIO -->|"bot.edit_message()"| EQ
+        EQ -->|"Telegram API"| TG
+        TG -->|"Message"| AIO
+        
+        FAST -->|"SSE Stream"| WEB
+        WEB -->|"POST /chat"| FAST
     end
 
-    subgraph "COGNITIVE ENGINE [LangGraph State Machine]"
-        N1["Node 1: Router<br/>oxlo/llama-3-8b-fast<br/>Route: chat | complex"]
-        N2["Node 2: Divergent Generator<br/>asyncio.gather()<br/>Llama-3-70B + Mistral + Qwen"]
-        N3["Node 3: MCP Tool Caller<br/>MCP Client → Python Sandbox"]
-        N4["Node 4: Auditor<br/>oxlo/deepseek-r1<br/>Consensus Check + Loop Control"]
-        N5["Node 5: Synthesizer<br/>oxlo/llama-3-70b<br/>Final Answer Composer"]
+    subgraph "COGNITIVE ENGINE [LangGraph]"
+        N1["Node 1: Router<br/>llama-3.2-3b<br/>Route: chat | complex"]
+        N2["Node 2: Divergent Generator<br/>asyncio.gather()<br/>DeepSeek-V3.2 + Mistral-7B"]
+        N3["Node 3: MCP Tool Caller<br/>execute_python()"]
+        N4["Node 4: Auditor<br/>deepseek-r1-8b<br/>Consensus + Verdict"]
+        N5["Node 5: Synthesizer<br/>deepseek-v3.2<br/>Final Composer"]
 
         N1 -->|"route=complex"| N2
         N1 -->|"route=chat"| N5
-        N2 -->|"hypotheses[]"| N3
+        N2 -->|"hypotheses"| N3
         N3 -->|"sandbox_logs"| N4
-        N4 -->|"consensus=false & cycles<3"| N2
-        N4 -->|"consensus=true"| N5
-        N4 -->|"cycles>=3"| N5
+        N4 -->|"retry"| N2
+        N4 -->|"voted"| N5
     end
 
     subgraph "MCP TOOLING LAYER"
-        MCPS["MCP Server (stdio)<br/>FastMCP / Python"]
-        E2B["E2B Secure MicroVM<br/>Python 3.11 Sandbox"]
-        MCPS -->|"execute_python(code)"| E2B
-        E2B -->|"stdout / stderr / artifacts"| MCPS
+        MCPS["FastMCP Server<br/>stdio transport"]
+        E2B["E2B MicroVM<br/>Python Sandbox"]
+        MCPS --> E2B
     end
 
     subgraph "INTELLIGENCE LAYER [Oxlo API]"
-        OX_FAST["Oxlo Fast<br/>llama-3-8b-instruct"]
-        OX_A["Oxlo Gen A<br/>llama-3-70b-instruct"]
-        OX_B["Oxlo Gen B<br/>mistral-7b-instruct"]
-        OX_C["Oxlo Gen C<br/>qwen2-72b-instruct"]
-        OX_AUDIT["Oxlo Auditor<br/>deepseek-r1"]
-        OX_SYNTH["Oxlo Synth<br/>llama-3-70b-instruct"]
+        M1["Router: llama-3.2-3b"]
+        M2["Gen A: deepseek-v3.2"]
+        M3["Gen B: mistral-7b"]
+        M4["Auditor: deepseek-r1-8b"]
     end
 
     subgraph "PERSISTENCE LAYER [Supabase]"
-        PG["PostgreSQL<br/>sessions + chat_history<br/>+ audit_logs"]
+        PG["PostgreSQL<br/>history + audit_logs"]
     end
 
-    AIO -->|"invoke graph"| N1
-    N1 --- OX_FAST
-    N2 --- OX_A
-    N2 --- OX_B
-    N2 --- OX_C
+    AIO & FAST -->|"invoke_graph"| N1
     N3 -->|"MCP stdio"| MCPS
-    N4 --- OX_AUDIT
-    N5 --- OX_SYNTH
-    N1 & N2 & N4 & N5 -->|"read/write state"| PG
-    AIO -->|"stream events"| EQ
+    N1 & N2 & N4 & N5 --- INTELLIGENCE
+    N1 & N5 --> PG
 ```
 
 ### Core Components & Infrastructure Strategy
 
 | Component | Technology | Justification |
 |---|---|---|
-| **Bot Framework** | `aiogram 3.x` | Native `asyncio`; supports FSM for conversation state; edit-in-place via `bot.edit_message_text()` |
-| **Orchestration** | `LangGraph` | Stateful cyclic graphs; `astream_events` for granular event emission; native `async` support |
-| **LLM Gateway** | `Oxlo API` | Single endpoint for multi-provider model routing; maximizes hackathon API usage score |
-| **Tool Protocol** | `MCP (stdio)` | Universal tool interface; decouples agent logic from tool implementation; future-proof |
-| **Code Sandbox** | `E2B` | Hardware-isolated microVM; sub-300ms execution after warm; Python stdlib + numpy/scipy available |
-| **Database** | `Supabase (PostgreSQL)` | Managed Postgres; free tier covers hackathon scale; built-in pgvector for future memory |
-| **Deployment** | `Railway` | One-click GitHub deploy; Background Worker service type for long-polling bots; no cold starts |
+| **Bot Framework** | `aiogram 3.x` | Native `asyncio`; supports FSM; edit-in-place via debounced queue |
+| **Web UI** | `React + Vite` | High-fidelity Command Center with GSAP motion and custom SVG graphs |
+| **API Gateway** | `FastAPI` | Asynchronous SSE (Server-Sent Events) streaming for real-time web delivery |
+| **Orchestration** | `LangGraph` | Stateful cyclic graphs; granular `astream_events` emission |
+| **LLM Swarm** | `Oxlo API` | Dual-mode reasoning: Fast Routing + Parallel Verification Swarm |
+| **Code Sandbox** | `E2B` | Hardware-isolated microVM via MCP; sub-300ms execution after warm |
 
 ---
 
@@ -130,35 +125,28 @@ oxlo-sentinel/
 ├── .env.example                    # All required secrets documented
 ├── .gitignore
 ├── pyproject.toml                  # uv / pip dependency manifest
-├── railway.toml                    # Railway deployment config
-├── README.md
+├── railway.toml           
+├── api/
+│   └── main.py                     # FastAPI SSE gateway entrypoint
 │
-├── bot/
-│   ├── __init__.py
-│   ├── main.py                     # aiogram entrypoint, long-polling start
-│   ├── handlers/
-│   │   ├── __init__.py
-│   │   ├── message_handler.py      # Incoming message router
-│   │   └── error_handler.py        # Global exception handler
-│   ├── middleware/
-│   │   ├── __init__.py
-│   │   ├── rate_limiter.py         # Per-user rate limiting (5 req/min)
-│   │   └── session_loader.py       # Load/create DB session for user
-│   └── utils/
-│       ├── __init__.py
-│       └── edit_queue.py           # Debounced Telegram message editor
+├── web/                             # React Command Center
+│   ├── src/
+│   │   ├── pages/                   # Chat, Audit, Docs, Tutorial, Telegram
+│   │   └── components/              # ArchitectureGraph, SwarmStatus
+│   └── vite.config.js
 │
-├── graph/
-│   ├── __init__.py
-│   ├── state.py                    # SentinelState TypedDict definition
-│   ├── graph_builder.py            # LangGraph topology assembly
-│   └── nodes/
-│       ├── __init__.py
-│       ├── router_node.py          # Node 1: Fast routing decision
-│       ├── generator_node.py       # Node 2: Parallel Oxlo generation
-│       ├── mcp_node.py             # Node 3: MCP tool invocation
-│       ├── auditor_node.py         # Node 4: Consensus + loop gate
-│       └── synthesizer_node.py     # Node 5: Final answer composition
+├── bot/                            # Telegram Interface
+│   ├── main.py                     # aiogram entrypoint
+│   └── utils/edit_queue.py         # Debounced UI updates
+│
+├── graph/                          # Cognitive Swarm logic
+│   ├── nodes/
+│   │   ├── router_node.py          # llama-3.2-3b classifier
+│   │   ├── generator_node.py       # Parallel DeepSeek/Mistral swarm
+│   │   ├── mcp_node.py             # Sandbox invocation
+│   │   ├── auditor_node.py         # deepseek-r1 reasoning
+│   │   └── synthesizer_node.py     # Final human-centric pass
+│   └── graph_builder.py
 │
 ├── mcp_server/
 │   ├── __init__.py

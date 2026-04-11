@@ -3,6 +3,7 @@ from langchain_core.messages import AIMessage
 from openai import AsyncOpenAI
 from graph.state import SentinelState
 from config.settings import settings
+from graph.concurrency import oxlo_concurrency_semaphore
 
 # --- Initialization ---
 oxlo_client = AsyncOpenAI(
@@ -29,15 +30,18 @@ async def _call_oxlo_with_retry(messages: list, model: str = SYNTH_MODEL, max_to
     last_err = None
     for attempt in range(retries):
         try:
-            response = await asyncio.wait_for(
-                oxlo_client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.3,
-                    max_tokens=max_tokens
-                ),
-                timeout=25.0
-            )
+            # First, secure the API slot
+            async with oxlo_concurrency_semaphore:
+                # Second, execute with a generous timeout
+                response = await asyncio.wait_for(
+                    oxlo_client.chat.completions.create(
+                        model=model,
+                        messages=messages,
+                        temperature=0.3,
+                        max_tokens=max_tokens
+                    ),
+                    timeout=90.0
+                )
             return response.choices[0].message.content or ""
         except Exception as e:
             last_err = e

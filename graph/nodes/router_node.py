@@ -4,6 +4,7 @@ from typing import Optional
 from openai import AsyncOpenAI
 from graph.state import SentinelState
 from config.settings import settings
+from graph.concurrency import oxlo_concurrency_semaphore
 
 
 # --- Initialization ---
@@ -54,21 +55,26 @@ async def model_based_sanitizer(user_query: str) -> bool:
     Second-layer defense: semantic audit via Llama-3.2-3B.
     Returns True if the prompt is malicious/unsafe.
     """
-    try:
-        response = await oxlo_client.chat.completions.create(
-            model=ROUTER_MODEL,
-            messages=[
-                {"role": "system", "content": SANITIZER_SYSTEM_PROMPT},
-                {"role": "user", "content": f"PROMPT TO AUDIT:\n{user_query}"},
-            ],
-            temperature=0.0,
-            max_tokens=10,
-        )
-        verdict = (response.choices[0].message.content or "").strip().upper()
-        return "MALICIOUS" in verdict
-    except Exception:
-        # Fallback to safe but suspicious in case of API failure during audit
-        return False
+    for attempt in range(3):
+        try:
+            async with oxlo_concurrency_semaphore:
+                response = await oxlo_client.chat.completions.create(
+                    model=ROUTER_MODEL,
+                    messages=[
+                        {"role": "system", "content": SANITIZER_SYSTEM_PROMPT},
+                        {"role": "user", "content": f"PROMPT TO AUDIT:\n{user_query}"},
+                    ],
+                    temperature=0.0,
+                    max_tokens=10,
+                )
+            verdict = (response.choices[0].message.content or "").strip().upper()
+            return "MALICIOUS" in verdict
+        except Exception as e:
+            if any(x in str(e) for x in ["429", "504", "502", "limit"]) and attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            # Fallback to safe but suspicious in case of API failure during audit
+            return False
 
 
 # --- Logic ---
@@ -151,15 +157,16 @@ async def router_node(state: SentinelState) -> dict:
         }
 
     # --- 3. Model-Based Intent Classification ---
-    response = await oxlo_client.chat.completions.create(
-        model=ROUTER_MODEL,
-        messages=[
-            {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
-            {"role": "user", "content": clean_query},
-        ],
-        temperature=0.0,
-        max_tokens=10,
-    )
+    async with oxlo_concurrency_semaphore:
+        response = await oxlo_client.chat.completions.create(
+            model=ROUTER_MODEL,
+            messages=[
+                {"role": "system", "content": ROUTER_SYSTEM_PROMPT},
+                {"role": "user", "content": clean_query},
+            ],
+            temperature=0.0,
+            max_tokens=10,
+        )
     
     raw_route = (response.choices[0].message.content or "").strip().lower()
     # Be more aggressive about 'chat' unless it's clearly 'complex'

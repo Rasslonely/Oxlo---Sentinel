@@ -21,14 +21,31 @@ async def cmd_start(message: types.Message):
     welcome_text = (
         "🚀 **Oxlo-Sentinel: The Cognitive AI Hivemind**\n\n"
         "Welcome to the hivemind. I use a dual-mode engine for speed and precision:\n\n"
-        "⚡ **Flash Mode**: Instant (<1s) answers for simple math and chat.\n"
-        "🧠 **Thinking Mode**: Parallel Swarm debate + MCP Sandbox for complex reasoning.\n\n"
+        "⚡ **Flash Mode**: Instant (<1s) answers for simple chat.\n"
+        "🧠 **Thinking Mode**: Parallel Swarm debate + E2B Sandbox.\n\n"
         "💡 **Commands:**\n"
         "- `/think`: Force the Deep Swarm for your next question.\n"
-        "- `/fast`: Force a Flash response for speed.\n\n"
-        "Try: `What is 1+1*0?` or `Calculate the entropy of a black hole.`"
+        "- `/fast`: Force a Flash response for speed.\n"
+        "- `/audit <claim>`: Start a full swarm audit immediately.\n"
+        "- `/calc <math>`: Mathematical proof via secure sandbox.\n"
+        "- `/help`: Deep-dive into our architecture."
     )
     await message.answer(welcome_text, parse_mode="Markdown")
+
+
+@router.message(Command("help"))
+async def cmd_help(message: types.Message):
+    """Architectural explanation."""
+    help_text = (
+        "🏗️ **System Architecture**\n\n"
+        "1. **Cerebro**: Pre-cognitive logic retrieval from memory.\n"
+        "2. **Omniscient Shield**: Global concurrency protection (Rate-Limit safe).\n"
+        "3. **Skeptic Pattern**: Multiple models debate your claim.\n"
+        "4. **MCP Sandbox**: Verified Python execution for mathematical truth.\n\n"
+        "**Usage:**\n"
+        "Simply send a message, or use `/audit` for critical logical verification."
+    )
+    await message.answer(help_text, parse_mode="Markdown")
 
 
 @router.message(Command("think"))
@@ -41,6 +58,24 @@ async def cmd_think(message: types.Message):
 async def cmd_fast(message: types.Message):
     USER_MODES[message.chat.id] = "fast"
     await message.answer("⚡ **Mode: Flash Response enabled.**\nI will prioritize speed and instant answers.")
+
+
+@router.message(Command("calc"))
+@router.message(Command("audit"))
+async def cmd_complex_shortcuts(message: types.Message):
+    """Directly trigger swarm from a command."""
+    # If using /audit or /calc with text, process it immediately
+    arg_text = message.text.split(maxsplit=1)[1] if " " in message.text else None
+    
+    if not arg_text:
+        USER_MODES[message.chat.id] = "think"
+        label = "Logical Audit" if "/audit" in message.text else "Math Verification"
+        return await message.answer(f"🧠 **Mode: {label} enabled.**\nSend your query and I will fire the swarm.")
+    
+    # Otherwise, hijack and fire handle_query immediately
+    USER_MODES[message.chat.id] = "think"
+    message.text = arg_text
+    return await handle_query(message, "cmd_user", "cmd_session")
 
 
 # --- Main Hivemind Handler ---

@@ -4,6 +4,7 @@ import asyncio
 from openai import AsyncOpenAI
 from graph.state import SentinelState
 from config.settings import settings
+from graph.concurrency import oxlo_concurrency_semaphore
 
 
 # --- Initialization ---
@@ -55,32 +56,39 @@ async def auditor_node(state: SentinelState) -> dict:
     else:
         audit_input = f"MODEL HYPOTHESES:\n{hypotheses_text}\n\nNO SANDBOX DATA AVAILABLE."
 
-    # 2. Invoke DeepSeek-R1-8B
-    # 2. Invoke DeepSeek
-    try:
-        coro = oxlo_client.chat.completions.create(
-            model=AUDITOR_MODEL,
-            messages=[
-                {"role": "system", "content": AUDITOR_SYSTEM_PROMPT},
-                {"role": "user", "content": audit_input},
-            ],
-            temperature=0.0,
-            max_tokens=800,
-            response_format={"type": "json_object"}
-        )
-        # Protect against silent API hangs
-        response = await asyncio.wait_for(coro, timeout=20.0)
-        
-        # 3. Parse JSON Response
-        raw_content = (response.choices[0].message.content or "").strip()
-        parsed = json.loads(raw_content)
-    except Exception as e:
-        # Fallback for parsing or API errors
-        parsed = {
-            "consensus_reached": False,
-            "reasoning": f"AUDITOR FAILED/TIMEOUT: {str(e)}",
-            "best_answer": None
-        }
+    # 2. Invoke DeepSeek with Concurrency Shield
+    for attempt in range(3):
+        try:
+            # First, wait for a slot (unlimited patience for the queue)
+            async with oxlo_concurrency_semaphore:
+                # Second, execute the reasoning with a robust timeout
+                coro = oxlo_client.chat.completions.create(
+                    model=AUDITOR_MODEL,
+                    messages=[
+                        {"role": "system", "content": AUDITOR_SYSTEM_PROMPT},
+                        {"role": "user", "content": audit_input},
+                    ],
+                    temperature=0.0,
+                    max_tokens=800,
+                    response_format={"type": "json_object"}
+                )
+                response = await asyncio.wait_for(coro, timeout=90.0)
+            
+            # 3. Parse JSON Response
+            raw_content = (response.choices[0].message.content or "").strip()
+            parsed = json.loads(raw_content)
+            break # Success
+        except Exception as e:
+            if any(x in str(e) for x in ["429", "504", "502", "limit"]) and attempt < 2:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            # Fallback for parsing or API errors
+            parsed = {
+                "consensus_reached": False,
+                "reasoning": f"AUDITOR FAILED/TIMEOUT: {str(e)}",
+                "best_answer": None
+            }
+            break
 
     consensus = parsed.get("consensus_reached", False)
     

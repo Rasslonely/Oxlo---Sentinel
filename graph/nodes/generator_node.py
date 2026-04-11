@@ -4,6 +4,7 @@ import re
 from openai import AsyncOpenAI
 from graph.state import SentinelState, Hypothesis
 from config.settings import settings
+from graph.concurrency import oxlo_concurrency_semaphore
 
 
 # --- Initialization ---
@@ -42,18 +43,18 @@ async def _call_single_model(model_id: str, user_query: str, retries: int = 3, i
     if is_skeptic:
         system_prompt += "\nSPECIAL ROLE: You are acting as the SKEPTIC. Hunt for logic traps."
         
-    last_err = None
     for attempt in range(retries):
         try:
-            response = await oxlo_client.chat.completions.create(
-                model=model_id,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_query},
-                ],
-                temperature=0.0, # Pure deterministic analytics
-                max_tokens=1500,
-            )
+            async with oxlo_concurrency_semaphore:
+                response = await oxlo_client.chat.completions.create(
+                    model=model_id,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_query},
+                    ],
+                    temperature=0.0, # Pure deterministic analytics
+                    max_tokens=1500,
+                )
             
             content = response.choices[0].message.content or ""
             
@@ -73,13 +74,12 @@ async def _call_single_model(model_id: str, user_query: str, retries: int = 3, i
             )
         except Exception as e:
             last_err = e
-            # Only retry on 504 (timeout) or 502 (bad gateway)
-            if "504" in str(e) or "502" in str(e) or "Gateway Timeout" in str(e):
+            # Retry on 504 (timeout), 502 (bad gateway), or 429 (concurrency/rate limit)
+            if any(x in str(e) for x in ["504", "502", "429", "limit", "Timeout"]):
                 backoff = 2 ** attempt
                 await asyncio.sleep(backoff)
                 continue
             else:
-                # Other errors (429, 401) should fail fast to avoid infinite locks
                 break
 
     # If we get here, all retries failed or it was a non-retriable error
@@ -90,14 +90,6 @@ async def _call_single_model(model_id: str, user_query: str, retries: int = 3, i
         confidence=0.0
     )
 
-
-# --- Configuration ---
-# Parallel swarm models
-GENERATOR_MODELS = [
-    "deepseek-v3.2", # Reverted to standard V3 to prevent <thought> token suffocation timeouts
-    "llama-3.1-8b",    # High-performance parallel brain
-]
-ROUTER_MODEL = "llama-3.2-3b" # Fast classifier
 
 # --- Logic ---
 async def generator_node(state: SentinelState) -> dict:
@@ -129,18 +121,21 @@ async def generator_node(state: SentinelState) -> dict:
     tasks = []
     
     async def _safe_call(model_id, is_skeptic=False):
-        try:
-            return await asyncio.wait_for(
-                _call_single_model(model_id, actual_prompt, is_skeptic=is_skeptic),
-                timeout=45.0
-            )
-        except Exception as e:
-            return Hypothesis(
-                model_id=model_id,
-                content=f"ERROR: Model failed — {str(e)}",
-                extracted_code=None,
-                confidence=0.0
-            )
+        # 1. Wait for an available API slot (No timeout on queuing)
+        async with oxlo_concurrency_semaphore:
+            # 2. Execute the model logic with a dedicated 90s reasoning window
+            try:
+                return await asyncio.wait_for(
+                    _call_single_model(model_id, actual_prompt, is_skeptic=is_skeptic),
+                    timeout=90.0
+                )
+            except Exception as e:
+                return Hypothesis(
+                    model_id=model_id,
+                    content=f"ERROR: Model failed — {str(e)}",
+                    extracted_code=None,
+                    confidence=0.0
+                )
 
     for i, mid in enumerate(GENERATOR_MODELS):
         is_skeptic = (i == 1) # SKEPTIC role to second model
@@ -149,13 +144,19 @@ async def generator_node(state: SentinelState) -> dict:
     # 2. Fire and Wait for the slowest logic chain to finish
     results = await asyncio.gather(*tasks)
 
-    # 3. Filter empty errors
-    valid_hypotheses = [
-        h for h in results 
-        if "rate_limit_exceeded" not in h["content"] and "Concurrency limit" not in h["content"]
-    ]
+    # 3. Validation & Reporting
+    # A hypothesis is considered valid if it has content and any confidence
+    valid_hypotheses = [h for h in results if h["confidence"] > 0]
+    error_count = len(results) - len(valid_hypotheses)
+    
+    if valid_hypotheses:
+        status = f"🧠 {len(valid_hypotheses)} hypotheses generated (Swarm Active)"
+        if error_count > 0:
+            status += f" — {error_count} nodes stalled"
+    else:
+        status = f"❌ Swarm Stalled: All nodes failed (API Concurrency/Rate limit)"
 
     return {
         "agent_hypotheses": valid_hypotheses,
-        "status_messages": status_messages + [f"🧠 {len(valid_hypotheses)} hypotheses generated (True Swarm Async)"]
+        "status_messages": status_messages + [status]
     }

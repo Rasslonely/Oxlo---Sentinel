@@ -53,13 +53,17 @@ async def memory_committer_node(state: SentinelState) -> dict:
     try:
         logic_pattern, embedding = await asyncio.wait_for(_commit_logic(), timeout=8.0)
         
-        # 3. Commit to Supabase
-        await supabase.table("logic_memories").insert({
-            "user_query": user_query,
-            "logic_pattern": logic_pattern,
-            "embedding": embedding,
-            "problem_type": "math_logic" # Logic could be more dynamic
-        }).execute()
+        # 3. Commit to Supabase with a safety timeout
+        # We wrap the execute() in a wait_for to prevent DB hangs from blocking the graph
+        await asyncio.wait_for(
+            supabase.table("logic_memories").insert({
+                "user_query": user_query,
+                "logic_pattern": logic_pattern,
+                "embedding": embedding,
+                "problem_type": "math_logic"
+            }).execute(),
+            timeout=5.0
+        )
         
         return {
             "status_messages": state.get("status_messages", []) + ["💾 [MEMORY] Applied Logic stored in Long-Term Memory"]

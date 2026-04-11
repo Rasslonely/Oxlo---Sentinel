@@ -20,14 +20,17 @@ async def pre_cognition_node(state: SentinelState) -> dict:
     """
     user_query = state.get("user_query", "")
     
-    # 1. Generate Embedding for the query
+    # 1. Generate Embedding for the query with Concurrency Shield
     try:
-        coro = oxlo_client.embeddings.create(
-            input=[user_query],
-            model=EMBEDDING_MODEL
-        )
-        response = await asyncio.wait_for(coro, timeout=10.0)
-        query_embedding = response.data[0].embedding
+        from graph.concurrency import oxlo_concurrency_semaphore
+        # Wait for slot
+        async with oxlo_concurrency_semaphore:
+            coro = oxlo_client.embeddings.create(
+                input=[user_query],
+                model=EMBEDDING_MODEL
+            )
+            response = await asyncio.wait_for(coro, timeout=40.0)
+            query_embedding = response.data[0].embedding
     except Exception as e:
         return {
             "status_messages": state.get("status_messages", []) + [f"⚠️ Pre-Cognition failed: {str(e)}"],
