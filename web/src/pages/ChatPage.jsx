@@ -53,7 +53,8 @@ export default function ChatPage() {
     setIsTyping(true)
     setStatus('Routing...')
     try {
-      const res = await fetch('/api/chat', {
+      const apiBase = import.meta.env.VITE_API_URL || '/api'
+      const res = await fetch(`${apiBase}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: query }),
